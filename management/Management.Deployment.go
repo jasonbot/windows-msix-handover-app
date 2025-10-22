@@ -1203,12 +1203,18 @@ func (this *IPackageManager) RegisterPackageAsync(manifestUri *winrt.IUriRuntime
 	return _result
 }
 
-func (this *IPackageManager) FindPackages() *winrt.IIterable[*winrt.IPackage] {
+func (this *IPackageManager) FindPackages() (*winrt.IIterable[*winrt.IPackage], error) {
 	var _result *winrt.IIterable[*winrt.IPackage]
 	_hr, _, _ := syscall.SyscallN(this.Vtbl().FindPackages, uintptr(unsafe.Pointer(this)), uintptr(unsafe.Pointer(&_result)))
 	_ = _hr
+
+	err := com.NewErrorOrNil(win32.HRESULT(_hr))
+	if err != nil {
+		return nil, err
+	}
+
 	com.AddToScope(_result)
-	return _result
+	return _result, nil
 }
 
 func (this *IPackageManager) FindPackagesByUserSecurityId(userSecurityId string) *winrt.IIterable[*winrt.IPackage] {
