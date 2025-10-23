@@ -1,3 +1,9 @@
+github.com/go-ole/go-ole v1.2.6 h1:/Fpf6oFPoeFik9ty7siob0G6Ke8QvQEuVcuChpwXzpY=
+github.com/go-ole/go-ole v1.2.6/go.mod h1:pprOEPIfldk/42T2oK7lQ4v4JSDwmV0As9GaiUsvbm0=
+github.com/shirou/gopsutil v3.21.11+incompatible h1:+1+c1VGhc88SSonWP6foOcLhvnKlUeu/erjjvaPEYiI=
+github.com/shirou/gopsutil v3.21.11+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMTu2PcXUg8+E1lC7eC3UO/RA=
+github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
+github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 github.com/zzl/go-com v1.5.0 h1:ANiyOsvP1XfUugoZBIvCbvqh+Ns1DLSJ9lBF1zgHSak=
 github.com/zzl/go-com v1.5.0/go.mod h1:Q0gh9d2jtlY//GbUXVPD+dzc0te32p3cetGM6am2Ooo=
 github.com/zzl/go-win32api v1.2.0 h1:8cUPn/io9S0H/Ah4pnuM7xmElL2MDR9bKgl8AREG/AE=
@@ -10,5 +16,6 @@ github.com/zzl/go-winmd v1.0.0 h1:IIujFBiy4r2lCPgskgR9GN6um2ZJ2835Bmq08ZjZk0A=
 github.com/zzl/go-winmd v1.0.0/go.mod h1:8uV9Tkk5sxzeird6a8xS2stqbwZX6vama3xHI7v4Dgc=
 github.com/zzl/go-winrtapi v1.0.0 h1:K6FHwQ/um5tXBf6EPwcUwOrMcnurTdVOcHCirhsZRfw=
 github.com/zzl/go-winrtapi v1.0.0/go.mod h1:+P4U4e/yP9QO4uDrcCJVYXnCrgVJSY/1zES5pBr2bAA=
+golang.org/x/sys v0.0.0-20190916202348-b4ddaad3f8a3/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f h1:rlezHXNlxYWvBCzNses9Dlc7nGFaNMJeqLolcmQSSZY=
 golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
