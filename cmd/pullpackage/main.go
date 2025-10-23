@@ -16,6 +16,7 @@ import (
 	management "github.com/jasonbot/windows-msix-handover-app/management"
 	"github.com/shirou/gopsutil/process"
 	"github.com/zzl/go-com/com"
+	"github.com/zzl/go-win32api/v2/win32"
 	"github.com/zzl/go-winrtapi/winrt"
 	"golang.org/x/sys/windows/registry"
 )
@@ -151,7 +152,37 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 		return
 	}
 
-	pm.AddPackageAsync(uri.IUriRuntimeClass, nil, management.DeploymentOptions_ForceTargetApplicationShutdown)
+	op := pm.AddPackageAsync(
+		uri.IUriRuntimeClass,
+		nil,
+		management.DeploymentOptions_ForceTargetApplicationShutdown,
+	)
+	op.Put_Progress(
+		func(
+			asyncInfo *winrt.IAsyncOperationWithProgress[
+				*management.IDeploymentResult,
+				management.DeploymentProgress,
+			], progressInfo management.DeploymentProgress,
+		) com.Error {
+			_ = progressInfo.Percentage
+			return com.OK
+		})
+	op.Put_Completed(
+		func(
+			asyncInfo *winrt.IAsyncOperationWithProgress[
+				*management.IDeploymentResult,
+				management.DeploymentProgress,
+			],
+			asyncStatus winrt.AsyncStatus,
+		) com.Error {
+			if asyncStatus == winrt.AsyncStatus_Completed || asyncStatus == winrt.AsyncStatus_Error {
+				if r := asyncInfo.GetResults(); r != nil {
+					_ = r.Get_ErrorText()
+				}
+			}
+			win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
+			return com.OK
+		})
 	com.MessageLoop()
 }
 
