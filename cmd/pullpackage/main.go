@@ -21,6 +21,18 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+type updateFile struct {
+	Url    string `yaml:"url"`
+	Sha512 string `yaml:"sha512"`
+	Size   uint64 `yaml:"size"`
+}
+
+type updateStruct struct {
+	Files       []updateFile `yaml:"files"`
+	ReleaseDate string       `yaml:"releaseDate"`
+	Version     string       `yaml:"version"`
+}
+
 func stopAppIfRunning(appName string) {
 	exeName := fmt.Sprintf("%v.exe", appName)
 
