@@ -105,7 +105,18 @@ func uninstallAppIfInstalled(appName string) {
 	}
 }
 
-func downloadMSIXToDownloadsFolder(msixURL string) string {
+type writerWrapper struct {
+	Out        io.Writer
+	bytesSoFar int64
+	TotalBytes int64
+}
+
+func (w *writerWrapper) Write(p []byte) (n int, err error) {
+	w.bytesSoFar += int64(len(p))
+	return w.Out.Write(p)
+}
+
+func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string) string {
 	u, _ := url.Parse(msixURL)
 	if u == nil {
 		return ""
@@ -137,16 +148,7 @@ func downloadMSIXToDownloadsFolder(msixURL string) string {
 
 	f, _ := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0644)
 
-	/*
-	   bar := progressbar.DefaultBytes(
-	      resp.ContentLength,
-	      "downloading",
-	   )
-	   io.MultiWriter(f, bar)
-	*/
-
-	io.Copy(f, resp.Body)
-
+	io.Copy(&writerWrapper{Out: f, TotalBytes: fileSize}, resp.Body)
 	return fileName
 }
 
