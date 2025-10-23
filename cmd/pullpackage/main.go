@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/sha512"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"log"
 	"net/http"
@@ -106,14 +109,27 @@ func uninstallAppIfInstalled(appName string) {
 }
 
 type writerWrapper struct {
+	hasher     hash.Hash
 	Out        io.Writer
 	bytesSoFar int64
 	TotalBytes int64
 }
 
 func (w *writerWrapper) Write(p []byte) (n int, err error) {
+	if w.hasher == nil {
+		w.hasher = sha512.New()
+	}
+	w.hasher.Write(p)
 	w.bytesSoFar += int64(len(p))
 	return w.Out.Write(p)
+}
+
+func (w *writerWrapper) Hash() string {
+	if w.hasher != nil {
+		bs := w.hasher.Sum(nil)
+		return base64.StdEncoding.EncodeToString(bs)
+	}
+	return ""
 }
 
 func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string) string {
@@ -130,13 +146,12 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 	ext := path.Ext(fileName)
 	fileBase := path.Join(downloadsPath, fileName[:len(fileName)-len(ext)])
 
-	num := 1
-
+	num := 2
 	_, err := os.Stat(fileName)
 	for !errors.Is(err, os.ErrNotExist) {
-		num += 1
 		fileName = fmt.Sprintf("%v (%v)%v", fileBase, num, ext)
 		_, err = os.Stat(fileName)
+		num += 1
 	}
 
 	req, _ := http.NewRequest("GET", msixURL, nil)
@@ -148,7 +163,16 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 
 	f, _ := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0644)
 
-	io.Copy(&writerWrapper{Out: f, TotalBytes: fileSize}, resp.Body)
+	writer := writerWrapper{
+		Out:        f,
+		TotalBytes: fileSize,
+	}
+	io.Copy(&writer, resp.Body)
+
+	if writer.Hash() != sha512 {
+		return ""
+	}
+
 	return fileName
 }
 
