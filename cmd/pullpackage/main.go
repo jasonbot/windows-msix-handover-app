@@ -176,6 +176,35 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 	return fileName
 }
 
+func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithProgress[*R, P],
+	onProgress func(*winrt.IAsyncOperationWithProgress[*R, P], P) error,
+	onComplete func(*winrt.IAsyncOperationWithProgress[*R, P], winrt.AsyncStatus) error,
+) {
+	operation.Put_Progress(
+		func(operation *winrt.IAsyncOperationWithProgress[*R, P], progress P) com.Error {
+			if onProgress != nil {
+				if err := onProgress(operation, progress); err != nil {
+					return com.FAIL
+				}
+			}
+			return com.OK
+		},
+	)
+	operation.Put_Completed(
+		func(operation *winrt.IAsyncOperationWithProgress[*R, P], asyncStatus winrt.AsyncStatus) com.Error {
+			returnVal := com.OK
+			if err := onComplete(operation, asyncStatus); err != nil {
+				returnVal = com.FAIL
+			}
+			win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
+
+			return returnVal
+		},
+	)
+
+	com.MessageLoop()
+}
+
 func installMSIXFromDownloadsFolder(msixPath string) {
 	runtime.LockOSThread()
 	winrt.Initialize()
@@ -195,24 +224,22 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 		nil,
 		management.DeploymentOptions_ForceTargetApplicationShutdown,
 	)
-	op.Put_Progress(
+
+	Co_AwaitWithProgress(
+		op,
 		func(
-			asyncInfo *winrt.IAsyncOperationWithProgress[
-				*management.IDeploymentResult,
-				management.DeploymentProgress,
-			], progressInfo management.DeploymentProgress,
-		) com.Error {
-			_ = progressInfo.Percentage
-			return com.OK
-		})
-	op.Put_Completed(
+			_ *winrt.IAsyncOperationWithProgress[*management.IDeploymentResult, management.DeploymentProgress],
+			progress management.DeploymentProgress,
+		) error {
+			log.Println("Percentage:", progress.Percentage)
+			return nil
+		},
 		func(
-			asyncInfo *winrt.IAsyncOperationWithProgress[
-				*management.IDeploymentResult,
-				management.DeploymentProgress,
-			],
+			asyncInfo *winrt.IAsyncOperationWithProgress[*management.IDeploymentResult, management.DeploymentProgress],
 			asyncStatus winrt.AsyncStatus,
-		) com.Error {
+		) error {
+			log.Println("Finished:", asyncStatus)
+
 			if asyncStatus == winrt.AsyncStatus_Completed || asyncStatus == winrt.AsyncStatus_Error {
 				if r := asyncInfo.GetResults(); r != nil {
 					if asyncStatus == winrt.AsyncStatus_Error {
@@ -220,9 +247,10 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 					}
 				}
 			}
-			win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
-			return com.OK
-		})
+			return nil
+		},
+	)
+
 	com.MessageLoop()
 }
 
