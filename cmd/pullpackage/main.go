@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	management "github.com/jasonbot/windows-msix-handover-app/management"
 	"github.com/shirou/gopsutil/process"
 	"github.com/zzl/go-com/com"
@@ -106,6 +107,24 @@ func uninstallAppIfInstalled(appName string) {
 			}
 		}
 	}
+}
+
+func findLatestMSIXUpdate(channelYamlURL string) (string, int64, string, error) {
+	req, _ := http.NewRequest("GET", channelYamlURL, nil)
+	resp, _ := http.DefaultClient.Do(req)
+	if resp.StatusCode != 200 {
+		return "", 0, "", fmt.Errorf("fetching %v returned %v", channelYamlURL, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	var config updateFile
+	if yamlSource, err := io.ReadAll(resp.Body); err == nil {
+		yaml.Unmarshal(yamlSource, &config)
+	} else {
+		return "", 0, "", err
+	}
+
+	return config.Url, int64(config.Size), config.Sha512, nil
 }
 
 type writerWrapper struct {
@@ -243,20 +262,35 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 			if asyncStatus == winrt.AsyncStatus_Completed || asyncStatus == winrt.AsyncStatus_Error {
 				if r := asyncInfo.GetResults(); r != nil {
 					if asyncStatus == winrt.AsyncStatus_Error {
-						_ = r.Get_ErrorText()
+						errorText := r.Get_ErrorText()
+						log.Println("Error:", errorText)
+					} else {
+						log.Println("It worked")
 					}
 				}
 			}
 			return nil
 		},
 	)
+}
 
-	com.MessageLoop()
+type appConfig struct {
+	AppName        string
+	ChannelYamlURL string
 }
 
 func main() {
-	appName := "Notion Dev"
+	app := appConfig{
+		AppName:        "Notion Dev",
+		ChannelYamlURL: "https://fart.com/",
+	}
 
-	stopAppIfRunning(appName)
-	uninstallAppIfInstalled(appName)
+	stopAppIfRunning(app.AppName)
+	uninstallAppIfInstalled(app.AppName)
+
+	msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(app.ChannelYamlURL)
+	if err != nil {
+		msixPath := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512)
+		installMSIXFromDownloadsFolder(msixPath)
+	}
 }

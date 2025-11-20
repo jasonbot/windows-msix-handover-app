@@ -3,6 +3,7 @@ module github.com/jasonbot/windows-msix-handover-app
 go 1.25.3
 
 require (
+	github.com/goccy/go-yaml v1.18.0
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
