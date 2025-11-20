@@ -215,7 +215,9 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 		) com.Error {
 			if asyncStatus == winrt.AsyncStatus_Completed || asyncStatus == winrt.AsyncStatus_Error {
 				if r := asyncInfo.GetResults(); r != nil {
-					_ = r.Get_ErrorText()
+					if asyncStatus == winrt.AsyncStatus_Error {
+						_ = r.Get_ErrorText()
+					}
 				}
 			}
 			win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
