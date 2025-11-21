@@ -20,7 +20,6 @@ import (
 	management "github.com/jasonbot/windows-msix-handover-app/management"
 	"github.com/shirou/gopsutil/process"
 	"github.com/zzl/go-com/com"
-	"github.com/zzl/go-win32api/v2/win32"
 	"github.com/zzl/go-winrtapi/winrt"
 	"golang.org/x/sys/windows/registry"
 )
@@ -195,10 +194,34 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 	return fileName
 }
 
+func Co_Await[R, P comparable](operation *winrt.IAsyncOperation[*R],
+	onComplete func(*winrt.IAsyncOperation[*R], winrt.AsyncStatus) error,
+) {
+	done := make(chan struct{})
+
+	operation.Put_Completed(
+		func(operation *winrt.IAsyncOperation[*R], asyncStatus winrt.AsyncStatus) com.Error {
+			returnVal := com.OK
+			if err := onComplete(operation, asyncStatus); err != nil {
+				returnVal = com.FAIL
+			}
+			//win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
+			done <- struct{}{}
+
+			return returnVal
+		},
+	)
+
+	//com.MessageLoop()
+	<-done
+}
+
 func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithProgress[*R, P],
 	onProgress func(*winrt.IAsyncOperationWithProgress[*R, P], P) error,
 	onComplete func(*winrt.IAsyncOperationWithProgress[*R, P], winrt.AsyncStatus) error,
 ) {
+	done := make(chan struct{})
+
 	operation.Put_Progress(
 		func(operation *winrt.IAsyncOperationWithProgress[*R, P], progress P) com.Error {
 			if onProgress != nil {
@@ -215,13 +238,15 @@ func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithP
 			if err := onComplete(operation, asyncStatus); err != nil {
 				returnVal = com.FAIL
 			}
-			win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
+			//win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
+			done <- struct{}{}
 
 			return returnVal
 		},
 	)
 
-	com.MessageLoop()
+	//com.MessageLoop()
+	<-done
 }
 
 func installMSIXFromDownloadsFolder(msixPath string) {
