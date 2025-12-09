@@ -331,13 +331,16 @@ func runInstalledApp() {
 			currentPackage := iterator.Get_Current()
 			if currentPackage != nil {
 				il := currentPackage.Get_Id()
-				msixURI := fmt.Sprint("shell:AppsFolder\\", url.PathEscape(il.Get_FullName()))
-				ls, _ := NewByIID[winrt.ILauncherStatics](winrt.IID_ILauncherStatics)
-				uri := winrt.NewUri_CreateUri(msixURI)
-				proc := ls.LaunchUriAsync(uri.IUriRuntimeClass)
-				Co_Await[bool](proc, func(*winrt.IAsyncOperation[bool], winrt.AsyncStatus) error {
-					return nil
-				})
+				log.Println("App", il.Get_Name())
+				if il.Get_Name() == "MPOSSIBL:E" {
+					msixURI := fmt.Sprint("shell:AppsFolder\\", url.PathEscape(il.Get_FullName()))
+					ls, _ := NewByIID[winrt.ILauncherStatics](winrt.IID_ILauncherStatics)
+					uri := winrt.NewUri_CreateUri(msixURI)
+					proc := ls.LaunchUriAsync(uri.IUriRuntimeClass)
+					Co_Await[bool](proc, func(*winrt.IAsyncOperation[bool], winrt.AsyncStatus) error {
+						return nil
+					})
+				}
 			}
 			iterator.MoveNext()
 		}
