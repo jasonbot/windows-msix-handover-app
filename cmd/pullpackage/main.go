@@ -302,9 +302,9 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 	)
 }
 
-func NewByIID[T comparable](iid syscall.GUID) (T, error) {
-	var p T
-	hs := winrt.NewHStr("Windows.System.Launcher")
+func Co_CreateInstanceByClassID[T comparable](clsid string, iid syscall.GUID) (*T, error) {
+	var p *T
+	hs := winrt.NewHStr(clsid)
 	hr := win32.RoGetActivationFactory(hs.Ptr, &iid, unsafe.Pointer(&p))
 	if win32.FAILED(hr) {
 		return p, fmt.Errorf("error in processing: %v", win32.HRESULT_ToString(hr))
@@ -334,12 +334,19 @@ func runInstalledApp() {
 				log.Println("App", il.Get_Name())
 				if il.Get_Name() == "MPOSSIBL:E" {
 					msixURI := fmt.Sprint("shell:AppsFolder\\", url.PathEscape(il.Get_FullName()))
-					ls, _ := NewByIID[winrt.ILauncherStatics](winrt.IID_ILauncherStatics)
 					uri := winrt.NewUri_CreateUri(msixURI)
+
+					ls, _ := Co_CreateInstanceByClassID[winrt.ILauncherStatics](
+						"Windows.System.Launcher",
+						winrt.IID_ILauncherStatics,
+					)
+
 					proc := ls.LaunchUriAsync(uri.IUriRuntimeClass)
 					Co_Await[bool](proc, func(*winrt.IAsyncOperation[bool], winrt.AsyncStatus) error {
 						return nil
 					})
+
+					return
 				}
 			}
 			iterator.MoveNext()
@@ -359,11 +366,14 @@ func main() {
 	}
 
 	stopAppIfRunning(app.AppName)
-	uninstallAppIfInstalled(app.AppName)
 
 	msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(app.ChannelYamlURL)
 	if err != nil {
 		msixPath := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512)
-		installMSIXFromDownloadsFolder(msixPath)
+
+		if msixPath != "" {
+			uninstallAppIfInstalled(app.AppName)
+			installMSIXFromDownloadsFolder(msixPath)
+		}
 	}
 }
