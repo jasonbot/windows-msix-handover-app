@@ -15,11 +15,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"unsafe"
 
 	"github.com/goccy/go-yaml"
 	management "github.com/jasonbot/windows-msix-handover-app/management"
 	"github.com/shirou/gopsutil/process"
 	"github.com/zzl/go-com/com"
+	"github.com/zzl/go-win32api/v2/win32"
 	"github.com/zzl/go-winrtapi/winrt"
 	"golang.org/x/sys/windows/registry"
 )
@@ -194,13 +197,13 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 	return fileName
 }
 
-func Co_Await[R, P comparable](operation *winrt.IAsyncOperation[*R],
-	onComplete func(*winrt.IAsyncOperation[*R], winrt.AsyncStatus) error,
+func Co_Await[R comparable](operation *winrt.IAsyncOperation[R],
+	onComplete func(*winrt.IAsyncOperation[R], winrt.AsyncStatus) error,
 ) {
 	done := make(chan struct{})
 
 	operation.Put_Completed(
-		func(operation *winrt.IAsyncOperation[*R], asyncStatus winrt.AsyncStatus) com.Error {
+		func(operation *winrt.IAsyncOperation[R], asyncStatus winrt.AsyncStatus) com.Error {
 			returnVal := com.OK
 			if err := onComplete(operation, asyncStatus); err != nil {
 				returnVal = com.FAIL
@@ -216,14 +219,14 @@ func Co_Await[R, P comparable](operation *winrt.IAsyncOperation[*R],
 	<-done
 }
 
-func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithProgress[*R, P],
-	onProgress func(*winrt.IAsyncOperationWithProgress[*R, P], P) error,
-	onComplete func(*winrt.IAsyncOperationWithProgress[*R, P], winrt.AsyncStatus) error,
+func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithProgress[R, P],
+	onProgress func(*winrt.IAsyncOperationWithProgress[R, P], P) error,
+	onComplete func(*winrt.IAsyncOperationWithProgress[R, P], winrt.AsyncStatus) error,
 ) {
 	done := make(chan struct{})
 
 	operation.Put_Progress(
-		func(operation *winrt.IAsyncOperationWithProgress[*R, P], progress P) com.Error {
+		func(operation *winrt.IAsyncOperationWithProgress[R, P], progress P) com.Error {
 			if onProgress != nil {
 				if err := onProgress(operation, progress); err != nil {
 					return com.FAIL
@@ -233,7 +236,7 @@ func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithP
 		},
 	)
 	operation.Put_Completed(
-		func(operation *winrt.IAsyncOperationWithProgress[*R, P], asyncStatus winrt.AsyncStatus) com.Error {
+		func(operation *winrt.IAsyncOperationWithProgress[R, P], asyncStatus winrt.AsyncStatus) com.Error {
 			returnVal := com.OK
 			if err := onComplete(operation, asyncStatus); err != nil {
 				returnVal = com.FAIL
@@ -297,6 +300,48 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 			return nil
 		},
 	)
+}
+
+func NewByIID[T comparable](iid syscall.GUID) (T, error) {
+	var p T
+	hs := winrt.NewHStr("Windows.System.Launcher")
+	hr := win32.RoGetActivationFactory(hs.Ptr, &iid, unsafe.Pointer(&p))
+	if win32.FAILED(hr) {
+		return p, fmt.Errorf("error in processing: %v", win32.HRESULT_ToString(hr))
+	}
+	com.AddToScope(p)
+	return p, nil
+}
+
+func runInstalledApp() {
+	runtime.LockOSThread()
+	winrt.Initialize()
+	defer winrt.Uninitialize()
+
+	pm := management.NewPackageManager()
+	if pm.IUnknown.GetIUnknown() == nil {
+		log.Println("Ooof")
+		return
+	}
+
+	if packages, err := pm.FindPackages(); err == nil {
+		iterator := packages.First()
+
+		for iterator.Get_HasCurrent() == true {
+			currentPackage := iterator.Get_Current()
+			if currentPackage != nil {
+				il := currentPackage.Get_Id()
+				msixURI := fmt.Sprint("shell:AppsFolder\\", url.PathEscape(il.Get_FullName()))
+				ls, _ := NewByIID[winrt.ILauncherStatics](winrt.IID_ILauncherStatics)
+				uri := winrt.NewUri_CreateUri(msixURI)
+				proc := ls.LaunchUriAsync(uri.IUriRuntimeClass)
+				Co_Await[bool](proc, func(*winrt.IAsyncOperation[bool], winrt.AsyncStatus) error {
+					return nil
+				})
+			}
+			iterator.MoveNext()
+		}
+	}
 }
 
 type appConfig struct {
