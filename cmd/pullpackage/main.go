@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -125,7 +126,7 @@ func runMeElevated() {
 
 	err := windows.ShellExecute(0, verbPtr, exePtr, argPtr, cwdPtr, showCmd)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 }
 
@@ -146,7 +147,7 @@ func stopAppIfRunning(appName string) {
 				}
 				p = parentProc
 			} else {
-				fmt.Println()
+				log.Println()
 				return parentProc
 			}
 		}
@@ -158,10 +159,10 @@ func stopAppIfRunning(appName string) {
 				pb := filepath.Base(filepath.Clean(e))
 				if pb == exeName {
 					proc := findRootProcess(runningProcess)
-					fmt.Println("Found process", pb, proc.Pid)
+					log.Println("Found process", pb, proc.Pid)
 					proc.Terminate()
 					for pr, _ := proc.IsRunning(); pr; pr, _ = proc.IsRunning() {
-						fmt.Println("Waiting to quit")
+						log.Println("Waiting to quit")
 					}
 				}
 			}
@@ -192,13 +193,13 @@ func uninstallWin32AppIfInstalled(appName string) {
 						desiredProductName := fmt.Sprintf("%v %v", appName, displayVersion)
 
 						if displayName == desiredProductName {
-							fmt.Println("Found it:", quietUninstallString, publisher)
+							log.Println("Found it:", quietUninstallString, publisher)
 							return
 						}
 					}
 				}
 			} else {
-				fmt.Println("ERROR", err)
+				log.Println("ERROR", err)
 			}
 		}
 	}
@@ -268,7 +269,17 @@ func (w *writerWrapper) Hash() string {
 	return ""
 }
 
-func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string) string {
+func shaForPath(filePath string) string {
+	hasher := sha512.New()
+	if s, err := ioutil.ReadFile(filePath); err == nil {
+		hasher.Write(s)
+		bs := hasher.Sum(nil)
+		return base64.StdEncoding.EncodeToString(bs)
+	}
+	return ""
+}
+
+func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha512Sum string) string {
 	u, _ := url.Parse(msixURL)
 	if u == nil {
 		return ""
@@ -286,6 +297,11 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 	num := 2
 	_, err := os.Stat(fileName)
 	for !errors.Is(err, os.ErrNotExist) {
+		if shaForPath(fileName) == expectedSha512Sum {
+			log.Println("Found already downloaded", fileName)
+			return fileName
+		}
+
 		fileName = fmt.Sprintf("%v (%v)%v", fileBase, num, ext)
 		_, err = os.Stat(fileName)
 		num += 1
@@ -306,7 +322,7 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 	}
 	io.Copy(&writer, resp.Body)
 
-	if writer.Hash() != sha512 {
+	if writer.Hash() != expectedSha512Sum {
 		return ""
 	}
 
@@ -473,7 +489,7 @@ func runInstalledApp(appId string) {
 			iterator.MoveNext()
 		}
 	} else {
-		fmt.Println("Ouch", err)
+		log.Println("Ouch", err)
 	}
 }
 
