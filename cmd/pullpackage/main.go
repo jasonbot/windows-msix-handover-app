@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/goccy/go-yaml"
+	"github.com/jasonbot/windows-msix-handover-app/config"
 	management "github.com/jasonbot/windows-msix-handover-app/management"
 	"github.com/shirou/gopsutil/process"
 	"github.com/zzl/go-com/com"
@@ -476,8 +477,15 @@ func runInstalledApp(protocolHandler string) {
 }
 
 func main() {
+	installTarget := config.TargetProduct
+
+	if installTarget == "" {
+		log.Println("No target set")
+		os.Exit(1)
+	}
+
 	app := DesktopProduct{
-		ProductName:  "Notion Dev",
+		ProductName:  installTarget,
 		Architecture: CPUArchitecture(runtime.GOARCH),
 	}
 
