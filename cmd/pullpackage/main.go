@@ -12,12 +12,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/goccy/go-yaml"
@@ -59,6 +59,7 @@ type DesktopProduct struct {
 type DesktopFeed struct {
 	YamlFeed string
 	AppID    string
+	Protocol string
 }
 
 var DesktopProductFeeds map[DesktopProduct]DesktopFeed
@@ -71,6 +72,7 @@ func init() {
 		}: {
 			YamlFeed: "https://desktop-release.notion-static.com/arm64-msix.yml",
 			AppID:    "com.notion.app.desktop.notion",
+			Protocol: "notion",
 		},
 		DesktopProduct{
 			ProductName:  "Notion Dev",
@@ -78,6 +80,7 @@ func init() {
 		}: {
 			YamlFeed: "https://dev-desktop-release.s3.us-west-2.amazonaws.com/arm64-msix.yml",
 			AppID:    "com.notion.app.desktop.notiondev",
+			Protocol: "notiondev",
 		},
 		DesktopProduct{
 			ProductName:  "Notion Stg",
@@ -85,6 +88,7 @@ func init() {
 		}: {
 			YamlFeed: "https://stg-desktop-release.s3.us-west-2.amazonaws.com/arm64-msix.yml",
 			AppID:    "com.notion.app.desktop.notionstg",
+			Protocol: "notionstg",
 		},
 		DesktopProduct{
 			ProductName:  "Notion",
@@ -92,6 +96,7 @@ func init() {
 		}: {
 			YamlFeed: "https://desktop-release.notion-static.com/msix.yml",
 			AppID:    "com.notion.app.desktop.notion",
+			Protocol: "notion",
 		},
 		DesktopProduct{
 			ProductName:  "Notion Dev",
@@ -99,6 +104,7 @@ func init() {
 		}: {
 			YamlFeed: "https://dev-desktop-release.s3.us-west-2.amazonaws.com/msix.yml",
 			AppID:    "com.notion.app.desktop.notiondev",
+			Protocol: "notiondev",
 		},
 		DesktopProduct{
 			ProductName:  "Notion Stg",
@@ -106,11 +112,67 @@ func init() {
 		}: {
 			YamlFeed: "https://stg-desktop-release.s3.us-west-2.amazonaws.com/msix.yml",
 			AppID:    "com.notion.app.desktop.notionstg",
+			Protocol: "notionstg",
 		},
 	}
 }
 
-func runMeElevated() {
+func Co_Await[R comparable](operation *winrt.IAsyncOperation[R],
+	onComplete func(*winrt.IAsyncOperation[R], winrt.AsyncStatus) error,
+) {
+	done := make(chan struct{})
+
+	operation.Put_Completed(
+		func(operation *winrt.IAsyncOperation[R], asyncStatus winrt.AsyncStatus) com.Error {
+			returnVal := com.OK
+			if err := onComplete(operation, asyncStatus); err != nil {
+				returnVal = com.FAIL
+			}
+			//win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
+			done <- struct{}{}
+
+			return returnVal
+		},
+	)
+
+	//com.MessageLoop()
+	<-done
+}
+
+func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithProgress[R, P],
+	onProgress func(*winrt.IAsyncOperationWithProgress[R, P], P) error,
+	onComplete func(*winrt.IAsyncOperationWithProgress[R, P], winrt.AsyncStatus) error,
+) {
+	done := make(chan struct{})
+
+	operation.Put_Progress(
+		func(operation *winrt.IAsyncOperationWithProgress[R, P], progress P) com.Error {
+			if onProgress != nil {
+				if err := onProgress(operation, progress); err != nil {
+					return com.FAIL
+				}
+			}
+			return com.OK
+		},
+	)
+	operation.Put_Completed(
+		func(operation *winrt.IAsyncOperationWithProgress[R, P], asyncStatus winrt.AsyncStatus) com.Error {
+			returnVal := com.OK
+			if err := onComplete(operation, asyncStatus); err != nil {
+				returnVal = com.FAIL
+			}
+			// win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
+			done <- struct{}{}
+
+			return returnVal
+		},
+	)
+
+	// com.MessageLoop()
+	<-done
+}
+
+func RunElevated() {
 	verb := "runas"
 	exe, _ := os.Executable()
 	cwd, _ := os.Getwd()
@@ -129,7 +191,7 @@ func runMeElevated() {
 	}
 }
 
-func amAdmin() bool {
+func IsRunningElevated() bool {
 	return windows.GetCurrentProcessToken().IsElevated()
 }
 
@@ -257,6 +319,7 @@ func (w *writerWrapper) Write(p []byte) (n int, err error) {
 	}
 	w.hasher.Write(p)
 	w.bytesSoFar += int64(len(p))
+	log.Println("Progress:", w.bytesSoFar, "/", w.TotalBytes)
 	return w.Out.Write(p)
 }
 
@@ -328,61 +391,6 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	return fileName
 }
 
-func Co_Await[R comparable](operation *winrt.IAsyncOperation[R],
-	onComplete func(*winrt.IAsyncOperation[R], winrt.AsyncStatus) error,
-) {
-	done := make(chan struct{})
-
-	operation.Put_Completed(
-		func(operation *winrt.IAsyncOperation[R], asyncStatus winrt.AsyncStatus) com.Error {
-			returnVal := com.OK
-			if err := onComplete(operation, asyncStatus); err != nil {
-				returnVal = com.FAIL
-			}
-			//win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
-			done <- struct{}{}
-
-			return returnVal
-		},
-	)
-
-	//com.MessageLoop()
-	<-done
-}
-
-func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithProgress[R, P],
-	onProgress func(*winrt.IAsyncOperationWithProgress[R, P], P) error,
-	onComplete func(*winrt.IAsyncOperationWithProgress[R, P], winrt.AsyncStatus) error,
-) {
-	done := make(chan struct{})
-
-	operation.Put_Progress(
-		func(operation *winrt.IAsyncOperationWithProgress[R, P], progress P) com.Error {
-			if onProgress != nil {
-				if err := onProgress(operation, progress); err != nil {
-					return com.FAIL
-				}
-			}
-			return com.OK
-		},
-	)
-	operation.Put_Completed(
-		func(operation *winrt.IAsyncOperationWithProgress[R, P], asyncStatus winrt.AsyncStatus) com.Error {
-			returnVal := com.OK
-			if err := onComplete(operation, asyncStatus); err != nil {
-				returnVal = com.FAIL
-			}
-			// win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
-			done <- struct{}{}
-
-			return returnVal
-		},
-	)
-
-	// com.MessageLoop()
-	<-done
-}
-
 func installMSIXFromDownloadsFolder(msixPath string) {
 	runtime.LockOSThread()
 	winrt.Initialize()
@@ -446,50 +454,10 @@ func Co_CreateInstanceByClassID[T comparable](clsid string, iid syscall.GUID) (*
 	return p, nil
 }
 
-func runInstalledApp(appId string) {
-	runtime.LockOSThread()
-	winrt.Initialize()
-	// defer winrt.Uninitialize()
+func runInstalledApp(protocolHandler string) {
+	uri := protocolHandler + "://"
 
-	pm := management.NewPackageManager()
-	if pm.IUnknown.GetIUnknown() == nil {
-		log.Println("No package manager")
-		return
-	}
-
-	if packages, err := pm.FindPackages(); err == nil {
-		log.Println("Looking for pakcages")
-		iterator := packages.First()
-
-		for iterator.Get_HasCurrent() == true {
-			currentPackage := iterator.Get_Current()
-			if currentPackage != nil {
-				il := currentPackage.Get_Id()
-				msixURI := fmt.Sprint("shell:AppsFolder\\", url.PathEscape(il.Get_FullName()))
-				packageName := il.Get_Name()
-				uri := winrt.NewUri_CreateUri(msixURI)
-				log.Println("App", packageName, msixURI)
-
-				if il.Get_Name() == appId {
-					log.Println("Launching", packageName, msixURI)
-					ls, _ := Co_CreateInstanceByClassID[winrt.ILauncherStatics](
-						"Windows.System.Launcher",
-						winrt.IID_ILauncherStatics,
-					)
-
-					proc := ls.LaunchUriAsync(uri.IUriRuntimeClass)
-					Co_Await[bool](proc, func(*winrt.IAsyncOperation[bool], winrt.AsyncStatus) error {
-						return nil
-					})
-
-					return
-				}
-			}
-			iterator.MoveNext()
-		}
-	} else {
-		log.Println("Ouch", err)
-	}
+	fmt.Println("Ran", uri, exec.Command("cmd", "/c", "start", uri).Run())
 }
 
 func main() {
@@ -498,8 +466,8 @@ func main() {
 		Architecture: CPUArchitecture(runtime.GOARCH),
 	}
 
-	if !amAdmin() {
-		runMeElevated()
+	if !IsRunningElevated() {
+		RunElevated()
 		return
 	}
 
@@ -513,11 +481,10 @@ func main() {
 		if msixPath != "" {
 			installMSIXFromDownloadsFolder(msixPath)
 			uninstallWin32AppIfInstalled(app.ProductName)
-			runInstalledApp(feed.AppID)
+			runInstalledApp(feed.Protocol)
 		}
 	}
 
-	time.Sleep(5 * time.Second)
 	log.Println("Press key to get out")
 	reader := bufio.NewReader(os.Stdin)
 	reader.ReadRune()
