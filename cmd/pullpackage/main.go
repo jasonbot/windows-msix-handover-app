@@ -481,9 +481,8 @@ func main() {
 	installTarget := config.TargetProduct
 
 	if installTarget == "" {
-		installTarget = "Notion Dev"
 		log.Println("No target set")
-		// os.Exit(1)
+		os.Exit(1)
 	}
 
 	app := DesktopProduct{
