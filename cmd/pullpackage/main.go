@@ -279,12 +279,13 @@ func uninstallWin32AppIfInstalled(appName string) {
 
 						if displayName == desiredProductName {
 							log.Println("Found it:", quietUninstallString, publisher)
+							log.Println("When done:", exec.Command(quietUninstallString).Run())
 							return
 						}
 					}
 				}
 			} else {
-				log.Println("ERROR", err)
+				log.Println("Error reading keys", err)
 			}
 		}
 	}
@@ -480,8 +481,9 @@ func main() {
 	installTarget := config.TargetProduct
 
 	if installTarget == "" {
+		installTarget = "Notion Dev"
 		log.Println("No target set")
-		os.Exit(1)
+		// os.Exit(1)
 	}
 
 	app := DesktopProduct{
@@ -494,16 +496,15 @@ func main() {
 		return
 	}
 
-	stopAppIfRunning(app.ProductName)
-
 	feed := DesktopProductFeeds[app]
 	msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(feed.YamlFeed)
 	if err == nil {
 		msixPath, doIOwnIt := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512)
 
 		if msixPath != "" {
-			installMSIXFromDownloadsFolder(msixPath, doIOwnIt)
+			stopAppIfRunning(app.ProductName)
 			uninstallWin32AppIfInstalled(app.ProductName)
+			installMSIXFromDownloadsFolder(msixPath, doIOwnIt)
 			runInstalledApp(feed.Protocol)
 		}
 	}
