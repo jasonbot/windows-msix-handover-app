@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -271,12 +270,12 @@ func (w *writerWrapper) Hash() string {
 
 func shaForPath(filePath string) string {
 	hasher := sha512.New()
-	if s, err := ioutil.ReadFile(filePath); err == nil {
+	if s, err := os.ReadFile(filePath); err == nil {
 		hasher.Write(s)
 		bs := hasher.Sum(nil)
 		return base64.StdEncoding.EncodeToString(bs)
 	}
-	return ""
+	return "no"
 }
 
 func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha512Sum string) string {
