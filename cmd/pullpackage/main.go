@@ -117,6 +117,22 @@ func init() {
 	}
 }
 
+type StepState string
+
+const (
+	StepInProgress StepState = "InProgress"
+	StepError      StepState = "Error"
+	StepSuccess    StepState = "Success"
+	StepSkipped    StepState = "Skipped"
+)
+
+type RunStep interface {
+	SetStepName(string)
+	SetStepMessage(string)
+	SetState(StepState)
+	SetProgressPercentage(uint8)
+}
+
 func Co_Await[R comparable](operation *winrt.IAsyncOperation[R],
 	onComplete func(*winrt.IAsyncOperation[R], winrt.AsyncStatus) error,
 ) {
@@ -128,14 +144,12 @@ func Co_Await[R comparable](operation *winrt.IAsyncOperation[R],
 			if err := onComplete(operation, asyncStatus); err != nil {
 				returnVal = com.FAIL
 			}
-			//win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
 			done <- struct{}{}
 
 			return returnVal
 		},
 	)
 
-	//com.MessageLoop()
 	<-done
 }
 
@@ -161,14 +175,12 @@ func Co_AwaitWithProgress[R, P comparable](operation *winrt.IAsyncOperationWithP
 			if err := onComplete(operation, asyncStatus); err != nil {
 				returnVal = com.FAIL
 			}
-			// win32.PostThreadMessage(com.GetContext().TID, win32.WM_QUIT, 0, 0)
 			done <- struct{}{}
 
 			return returnVal
 		},
 	)
 
-	// com.MessageLoop()
 	<-done
 }
 
@@ -341,10 +353,10 @@ func shaForPath(filePath string) string {
 	return "no"
 }
 
-func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha512Sum string) string {
+func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha512Sum string) (string, bool) {
 	u, _ := url.Parse(msixURL)
 	if u == nil {
-		return ""
+		return "", false
 	}
 
 	homeDir, _ := os.UserHomeDir()
@@ -361,7 +373,7 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	for !errors.Is(err, os.ErrNotExist) {
 		if shaForPath(fileName) == expectedSha512Sum {
 			log.Println("Found already downloaded", fileName)
-			return fileName
+			return fileName, false
 		}
 
 		fileName = fmt.Sprintf("%v (%v)%v", fileBase, num, ext)
@@ -372,7 +384,7 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	req, _ := http.NewRequest("GET", msixURL, nil)
 	resp, _ := http.DefaultClient.Do(req)
 	if resp.StatusCode != 200 {
-		return ""
+		return "", false
 	}
 	defer resp.Body.Close()
 
@@ -385,13 +397,13 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	io.Copy(&writer, resp.Body)
 
 	if writer.Hash() != expectedSha512Sum {
-		return ""
+		return "", false
 	}
 
-	return fileName
+	return fileName, true
 }
 
-func installMSIXFromDownloadsFolder(msixPath string) {
+func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool) {
 	runtime.LockOSThread()
 	winrt.Initialize()
 	// defer winrt.Uninitialize()
@@ -434,6 +446,9 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 						errorText := r.Get_ErrorText()
 						log.Println("Error:", errorText)
 					} else {
+						if doIOwnIt {
+							os.Remove(msixPath)
+						}
 						log.Println("It worked")
 					}
 				}
@@ -476,10 +491,10 @@ func main() {
 	feed := DesktopProductFeeds[app]
 	msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(feed.YamlFeed)
 	if err == nil {
-		msixPath := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512)
+		msixPath, doIOwnIt := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512)
 
 		if msixPath != "" {
-			installMSIXFromDownloadsFolder(msixPath)
+			installMSIXFromDownloadsFolder(msixPath, doIOwnIt)
 			uninstallWin32AppIfInstalled(app.ProductName)
 			runInstalledApp(feed.Protocol)
 		}
