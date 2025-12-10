@@ -217,6 +217,7 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, sha512 string
 	ext := path.Ext(fileName)
 	fileBase := path.Join(downloadsPath, fileName[:len(fileName)-len(ext)])
 
+	fileName = path.Join(downloadsPath, fileName)
 	num := 2
 	_, err := os.Stat(fileName)
 	for !errors.Is(err, os.ErrNotExist) {
@@ -310,7 +311,7 @@ func installMSIXFromDownloadsFolder(msixPath string) {
 	msixURI := fmt.Sprint("file://", strings.ReplaceAll(msixPath, "\\", "/"))
 	log.Println("MSIX", msixURI)
 	uri := winrt.NewUri_CreateUri(msixURI)
-	log.Println("MSIX URL:", msixURI)
+	log.Println("MSIX URL:", msixURI, "abs", uri.Get_AbsoluteUri())
 
 	pm := management.NewPackageManager()
 	if pm.IUnknown.GetIUnknown() == nil {
