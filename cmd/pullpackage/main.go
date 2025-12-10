@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/goccy/go-yaml"
@@ -24,6 +26,7 @@ import (
 	"github.com/zzl/go-com/com"
 	"github.com/zzl/go-win32api/v2/win32"
 	"github.com/zzl/go-winrtapi/winrt"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -53,17 +56,81 @@ type DesktopProduct struct {
 	Architecture CPUArchitecture
 }
 
-var DesktopProductFeeds map[DesktopProduct]string
+type DesktopFeed struct {
+	YamlFeed string
+	AppID    string
+}
+
+var DesktopProductFeeds map[DesktopProduct]DesktopFeed
 
 func init() {
-	DesktopProductFeeds = map[DesktopProduct]string{
-		DesktopProduct{ProductName: "Notion", Architecture: ArchArm64}:     "https://desktop-release.notion-static.com/arm64-msix.yml",
-		DesktopProduct{ProductName: "Notion Dev", Architecture: ArchArm64}: "https://dev-desktop-release.s3.us-west-2.amazonaws.com/arm64-msix.yml",
-		DesktopProduct{ProductName: "Notion Stg", Architecture: ArchArm64}: "https://stg-desktop-release.s3.us-west-2.amazonaws.com/arm64-msix.yml",
-		DesktopProduct{ProductName: "Notion", Architecture: ArchAmd64}:     "https://desktop-release.notion-static.com/msix.yml",
-		DesktopProduct{ProductName: "Notion Dev", Architecture: ArchAmd64}: "https://dev-desktop-release.s3.us-west-2.amazonaws.com/msix.yml",
-		DesktopProduct{ProductName: "Notion Stg", Architecture: ArchAmd64}: "https://stg-desktop-release.s3.us-west-2.amazonaws.com/msix.yml",
+	DesktopProductFeeds = map[DesktopProduct]DesktopFeed{
+		DesktopProduct{
+			ProductName:  "Notion",
+			Architecture: ArchArm64,
+		}: {
+			YamlFeed: "https://desktop-release.notion-static.com/arm64-msix.yml",
+			AppID:    "com.notion.app.desktop.notion",
+		},
+		DesktopProduct{
+			ProductName:  "Notion Dev",
+			Architecture: ArchArm64,
+		}: {
+			YamlFeed: "https://dev-desktop-release.s3.us-west-2.amazonaws.com/arm64-msix.yml",
+			AppID:    "com.notion.app.desktop.notiondev",
+		},
+		DesktopProduct{
+			ProductName:  "Notion Stg",
+			Architecture: ArchArm64,
+		}: {
+			YamlFeed: "https://stg-desktop-release.s3.us-west-2.amazonaws.com/arm64-msix.yml",
+			AppID:    "com.notion.app.desktop.notionstg",
+		},
+		DesktopProduct{
+			ProductName:  "Notion",
+			Architecture: ArchAmd64,
+		}: {
+			YamlFeed: "https://desktop-release.notion-static.com/msix.yml",
+			AppID:    "com.notion.app.desktop.notion",
+		},
+		DesktopProduct{
+			ProductName:  "Notion Dev",
+			Architecture: ArchAmd64,
+		}: {
+			YamlFeed: "https://dev-desktop-release.s3.us-west-2.amazonaws.com/msix.yml",
+			AppID:    "com.notion.app.desktop.notiondev",
+		},
+		DesktopProduct{
+			ProductName:  "Notion Stg",
+			Architecture: ArchAmd64,
+		}: {
+			YamlFeed: "https://stg-desktop-release.s3.us-west-2.amazonaws.com/msix.yml",
+			AppID:    "com.notion.app.desktop.notionstg",
+		},
 	}
+}
+
+func runMeElevated() {
+	verb := "runas"
+	exe, _ := os.Executable()
+	cwd, _ := os.Getwd()
+	args := strings.Join(os.Args[1:], " ")
+
+	verbPtr, _ := syscall.UTF16PtrFromString(verb)
+	exePtr, _ := syscall.UTF16PtrFromString(exe)
+	cwdPtr, _ := syscall.UTF16PtrFromString(cwd)
+	argPtr, _ := syscall.UTF16PtrFromString(args)
+
+	var showCmd int32 = 1 //SW_NORMAL
+
+	err := windows.ShellExecute(0, verbPtr, exePtr, argPtr, cwdPtr, showCmd)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func amAdmin() bool {
+	return windows.GetCurrentProcessToken().IsElevated()
 }
 
 func stopAppIfRunning(appName string) {
@@ -151,8 +218,6 @@ func findLatestMSIXUpdate(channelYamlURL string) (string, int64, string, error) 
 	} else {
 		return "", 0, "", err
 	}
-
-	log.Println("CXonfig", config)
 
 	for _, file := range config.Files {
 		if strings.HasSuffix(strings.ToLower(file.Url), ".msix") {
@@ -366,7 +431,7 @@ func Co_CreateInstanceByClassID[T comparable](clsid string, iid syscall.GUID) (*
 	return p, nil
 }
 
-func runInstalledApp() {
+func runInstalledApp(appId string) {
 	runtime.LockOSThread()
 	winrt.Initialize()
 	// defer winrt.Uninitialize()
@@ -378,6 +443,7 @@ func runInstalledApp() {
 	}
 
 	if packages, err := pm.FindPackages(); err == nil {
+		log.Println("Looking for pakcages")
 		iterator := packages.First()
 
 		for iterator.Get_HasCurrent() == true {
@@ -385,10 +451,12 @@ func runInstalledApp() {
 			if currentPackage != nil {
 				il := currentPackage.Get_Id()
 				msixURI := fmt.Sprint("shell:AppsFolder\\", url.PathEscape(il.Get_FullName()))
+				packageName := il.Get_Name()
 				uri := winrt.NewUri_CreateUri(msixURI)
-				log.Println("App", il.Get_Name(), msixURI)
+				log.Println("App", packageName, msixURI)
 
-				if il.Get_Name() == "MPOSSIBL:E" {
+				if il.Get_Name() == appId {
+					log.Println("Launching", packageName, msixURI)
 					ls, _ := Co_CreateInstanceByClassID[winrt.ILauncherStatics](
 						"Windows.System.Launcher",
 						winrt.IID_ILauncherStatics,
@@ -404,6 +472,8 @@ func runInstalledApp() {
 			}
 			iterator.MoveNext()
 		}
+	} else {
+		fmt.Println("Ouch", err)
 	}
 }
 
@@ -413,15 +483,27 @@ func main() {
 		Architecture: CPUArchitecture(runtime.GOARCH),
 	}
 
+	if !amAdmin() {
+		runMeElevated()
+		return
+	}
+
 	stopAppIfRunning(app.ProductName)
 
-	msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(DesktopProductFeeds[app])
+	feed := DesktopProductFeeds[app]
+	msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(feed.YamlFeed)
 	if err == nil {
 		msixPath := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512)
 
 		if msixPath != "" {
 			installMSIXFromDownloadsFolder(msixPath)
 			uninstallWin32AppIfInstalled(app.ProductName)
+			runInstalledApp(feed.AppID)
 		}
 	}
+
+	time.Sleep(5 * time.Second)
+	log.Println("Press key to get out")
+	reader := bufio.NewReader(os.Stdin)
+	reader.ReadRune()
 }

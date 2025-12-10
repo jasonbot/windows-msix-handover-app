@@ -15,6 +15,7 @@ require (
 
 require (
 	gioui.org/shader v1.0.8 // indirect
+	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-text/typesetting v0.3.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
