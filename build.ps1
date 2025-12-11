@@ -13,6 +13,6 @@ foreach ($product in $Products) {
     ~/go/bin/go-winres simply --icon icon.png --manifest gui --out cmd/rsrc --file-description="Installs the latest $($product) Desktop" --product-name="$($product) Installer" --copyright="Notion Labs, Inc." --file-version=git-tag --product-version=$(Get-Date -Format yyyy.MM.dd.HHmm)
     $exeFile = "Install Latest $($product) Desktop.exe"
     write-host "Making", $exeFile
-    go build -ldflags "-X 'github.com/jasonbot/windows-msix-handover-app/config.TargetProduct=$($product)'" -o "$($exeFile)" ./cmd
+    go build -ldflags "-X 'github.com/jasonbot/windows-msix-handover-app/config.TargetProduct=$($product)'" -o "$($exeFile)" ./cmd/
     upx $exeFile
 }

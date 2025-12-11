@@ -33,22 +33,6 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-type StepState string
-
-const (
-	StepInProgress StepState = "InProgress"
-	StepError      StepState = "Error"
-	StepSuccess    StepState = "Success"
-	StepSkipped    StepState = "Skipped"
-)
-
-type RunStep interface {
-	SetStepName(string)
-	SetStepMessage(string)
-	SetState(StepState)
-	SetProgressPercentage(uint8)
-}
-
 func IsArm64() bool {
 	if runtime.GOARCH == "arm64" {
 		return true
@@ -229,7 +213,7 @@ func findLatestMSIXUpdate(channelYamlURL string) (string, int64, string, error) 
 	}
 	defer resp.Body.Close()
 
-	var config YamlUpdateStruct
+	var config channels.YamlUpdateStruct
 	if yamlSource, err := io.ReadAll(resp.Body); err == nil {
 		yaml.Unmarshal(yamlSource, &config)
 	} else {
