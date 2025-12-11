@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"crypto/sha512"
+	"debug/pe"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -132,6 +133,21 @@ type RunStep interface {
 	SetStepMessage(string)
 	SetState(StepState)
 	SetProgressPercentage(uint8)
+}
+
+func IsArm64() bool {
+	if runtime.GOARCH == "arm64" {
+		return true
+	}
+
+	// Detect if we're running
+	var processMachine, nativeMachine uint16
+	err := windows.IsWow64Process2(windows.CurrentProcess(), &processMachine, &nativeMachine)
+	if err == nil {
+		return nativeMachine == pe.IMAGE_FILE_MACHINE_ARM64
+	}
+
+	return false
 }
 
 func Ro_Await[R comparable](operation *winrt.IAsyncOperation[R],
@@ -485,9 +501,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	var arch = ArchAmd64
+	if IsArm64() {
+		arch = ArchArm64
+	}
+
 	app := DesktopProduct{
 		ProductName:  installTarget,
-		Architecture: CPUArchitecture(runtime.GOARCH),
+		Architecture: arch,
 	}
 
 	if !IsRunningElevated() {
