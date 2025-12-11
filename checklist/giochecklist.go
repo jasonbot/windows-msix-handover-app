@@ -1,7 +1,6 @@
 package checklist
 
 import (
-	"image/color"
 	"log"
 	"os"
 	"sync"
@@ -91,11 +90,7 @@ func (g *giorunner) run() error {
 			gtx := app.NewContext(&ops, e)
 
 			// Define an large label with an appropriate text:
-			title := material.H1(theme, "Hello, Gio")
-
-			// Change the color of the label.
-			maroon := color.NRGBA{R: 127, G: 0, B: 0, A: 255}
-			title.Color = maroon
+			title := material.H1(theme, g.title)
 
 			// Change the position of the label.
 			title.Alignment = text.Middle
