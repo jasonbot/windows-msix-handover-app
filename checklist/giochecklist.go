@@ -1,18 +1,36 @@
 package checklist
 
 import (
+	"image/color"
 	"log"
 	"os"
 	"sync"
 	"weak"
 
 	"gioui.org/app"
+	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget/material"
+	"golang.org/x/sys/windows/registry"
 )
+
+func isDarkMode() bool {
+	personalizeKey := `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
+
+	if key, err := registry.OpenKey(registry.CURRENT_USER, personalizeKey, registry.ALL_ACCESS); err == nil {
+		defer key.Close()
+		if val, _, err := key.GetIntegerValue("AppsUseLightTheme"); err == nil {
+			return err != nil && val != 0
+		} else {
+			return false
+		}
+	}
+
+	return true
+}
 
 type giostep struct {
 	ChecklistStep
@@ -78,6 +96,21 @@ func (g *giorunner) main() {
 
 func (g *giorunner) run() error {
 	theme := material.NewTheme()
+	if isDarkMode() {
+		theme.Palette = material.Palette{
+			Bg:         color.NRGBA{R: 0xFF, G: 0xFE, B: 0xFC, A: 0xFF},
+			Fg:         color.NRGBA{R: 0x04, G: 0x04, B: 0x04, A: 0xFF},
+			ContrastBg: color.NRGBA{R: 0xEF, G: 0xF3, B: 0xF5, A: 0xFF},
+			ContrastFg: color.NRGBA{R: 0x23, G: 0x83, B: 0xE2, A: 0xFF},
+		}
+	} else {
+		theme.Palette = material.Palette{
+			Bg:         color.NRGBA{R: 0xFF, G: 0xFE, B: 0xFC, A: 0xFF},
+			Fg:         color.NRGBA{R: 0x04, G: 0x04, B: 0x04, A: 0xFF},
+			ContrastBg: color.NRGBA{R: 0xEF, G: 0xF3, B: 0xF5, A: 0xFF},
+			ContrastFg: color.NRGBA{R: 0x23, G: 0x83, B: 0xE2, A: 0xFF},
+		}
+	}
 	var ops op.Ops
 	for {
 		switch e := g.window.Event().(type) {
@@ -92,15 +125,15 @@ func (g *giorunner) run() error {
 			gtx := app.NewContext(&ops, e)
 
 			// Define an large label with an appropriate text:
-			title := material.H1(theme, g.title)
-
+			title := material.Label(theme, 14, g.title)
 			// Change the position of the label.
 			title.Alignment = text.Middle
+			title.Font.Weight = font.Bold
 
 			// Draw the label to the graphics context.
 			// title.Layout(gtx)
 
-			layout.UniformInset(unit.Dp(30)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			layout.UniformInset(unit.Dp(24)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{
 					Axis: layout.Vertical,
 				}.Layout(gtx,

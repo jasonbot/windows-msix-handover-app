@@ -169,21 +169,6 @@ func stopAppIfRunning(appName string) {
 	}
 }
 
-func isDarkMode() bool {
-	personalizeKey := `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
-
-	if key, err := registry.OpenKey(registry.CURRENT_USER, personalizeKey, registry.ALL_ACCESS); err == nil {
-		defer key.Close()
-		if val, _, err := key.GetIntegerValue("AppsUseLightTheme"); err == nil {
-			return err != nil && val != 0
-		} else {
-			return false
-		}
-	}
-
-	return true
-}
-
 func uninstallWin32AppIfInstalled(appName string) {
 	ui := `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`
 
