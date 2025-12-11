@@ -7,8 +7,10 @@ import (
 	"weak"
 
 	"gioui.org/app"
+	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/text"
+	"gioui.org/unit"
 	"gioui.org/widget/material"
 )
 
@@ -96,7 +98,32 @@ func (g *giorunner) run() error {
 			title.Alignment = text.Middle
 
 			// Draw the label to the graphics context.
-			title.Layout(gtx)
+			// title.Layout(gtx)
+
+			layout.UniformInset(unit.Dp(30)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{
+					Axis: layout.Vertical,
+				}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return title.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return material.Label(theme, 12, "one").Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return material.Label(theme, 12, "two").Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return material.Label(theme, 12, "three").Layout(gtx)
+					}),
+					layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
+						return layout.Spacer{}.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return material.Label(theme, 12, "four").Layout(gtx)
+					}),
+				)
+			})
 
 			// Pass the drawing operations to the GPU.
 			e.Frame(gtx.Ops)
