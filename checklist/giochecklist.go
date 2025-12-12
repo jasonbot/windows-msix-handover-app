@@ -339,13 +339,20 @@ func (g *giorunner) Finish() {
 	g.m.Lock()
 	defer g.m.Unlock()
 	g.done = true
+	founderror := false
 	for i := range g.steps {
 		if g.steps[i].State == StepPending {
 			g.steps[i].State = StepSkipped
 		}
+		if g.steps[i].State == StepError {
+			founderror = true
+		}
 	}
 	if g.window != nil {
 		g.window.Invalidate()
+	}
+	if !founderror {
+		os.Exit(0)
 	}
 }
 
