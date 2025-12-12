@@ -211,6 +211,7 @@ func uninstallWin32AppIfInstalled(appName string, rs checklist.RunStep) {
 			}
 		}
 	}
+	rs.SetState(checklist.StepSkipped)
 }
 
 func findLatestMSIXUpdate(channelYamlURL string, rs checklist.RunStep) (string, int64, string, error) {
@@ -434,7 +435,7 @@ func runInstalledApp(protocolHandler string, rs checklist.RunStep) {
 func isSilent() bool {
 	for _, i := range os.Args {
 		s := strings.ToLower(i)
-		if s == "/q" || s == "/s" || s == "--silent" || s == "--quiet" {
+		if strings.HasPrefix(s, "/s") || strings.HasPrefix(s, "/q") || s == "--silent" || s == "--quiet" {
 			return true
 		}
 	}
