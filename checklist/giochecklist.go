@@ -139,10 +139,26 @@ func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
 				}))
 		}
 
+		x := func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{
+				Axis:      layout.Horizontal,
+				Alignment: layout.Baseline,
+			}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return material.Label(theme, 24, "ICON").Layout(gtx)
+				}),
+				layout.Flexed(
+					1.0,
+					func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Vertical}.Layout(gtx, additionalSteps...)
+						})
+					}),
+			)
+		}
+
 		r := layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, additionalSteps...)
-			})
+			return x(gtx)
 		})
 
 		retVal = append(retVal, r)
