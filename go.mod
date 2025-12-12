@@ -11,6 +11,7 @@ require (
 	github.com/zzl/go-win32api/v2 v2.1.0
 	github.com/zzl/go-winrtapi v1.0.0
 	golang.org/x/sys v0.38.0
+	github.com/inkeliz/giosvg v0.0.0-20240821232107-3208d4350d55
 )
 
 require (
@@ -24,5 +25,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/exp/shiny v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/image v0.26.0 // indirect
+	golang.org/x/net v0.0.0-20210924151903-3ad01bbaa167 // indirect
 	golang.org/x/text v0.24.0 // indirect
 )
