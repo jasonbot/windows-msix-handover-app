@@ -315,7 +315,8 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	_, err := os.Stat(fileName)
 	for !errors.Is(err, os.ErrNotExist) {
 		if shaForPath(fileName) == expectedSha512Sum {
-			log.Println("Found already downloaded", fileName)
+			rs.SetMessage("You already have this file in your downloads folder")
+			rs.SetState(checklist.StepSkipped)
 			return fileName, false
 		}
 
@@ -324,6 +325,7 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 		num += 1
 	}
 
+	rs.SetMessage("Downloading " + msixURL)
 	req, _ := http.NewRequest("GET", msixURL, nil)
 	resp, _ := http.DefaultClient.Do(req)
 	if resp.StatusCode != 200 {
@@ -332,7 +334,14 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	}
 	defer resp.Body.Close()
 
-	f, _ := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0644)
+	fileName, _ = filepath.Abs(fileName)
+	fileNameDotPart := fileName + ".part"
+	f, err := os.OpenFile(fileNameDotPart, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		rs.SetState(checklist.StepError)
+		rs.SetMessage("Could not open file for writing")
+		return "", false
+	}
 
 	writer := writerWrapper{
 		Out:        f,
@@ -345,10 +354,13 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 		},
 	}
 	io.Copy(&writer, resp.Body)
+	f.Close()
+	os.Rename(fileNameDotPart, fileName)
 
 	if writer.Hash() != expectedSha512Sum {
 		return "", false
 	}
+	rs.SetMessage("Downloaded package: " + fileName)
 
 	rs.SetState(checklist.StepSuccess)
 	return fileName, true

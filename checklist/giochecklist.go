@@ -120,7 +120,6 @@ func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
 				}),
 		}
 		if step.Message != "" {
-			fmt.Println("Adding progress bar")
 			additionalSteps = append(additionalSteps, layout.Rigid(
 				func(gtx layout.Context) layout.Dimensions {
 					label := material.Label(theme, 11, step.Message)
@@ -129,17 +128,24 @@ func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
 		}
 
 		if step.Progress != nil {
-			fmt.Println("Adding progress bar")
 			additionalSteps = append(additionalSteps, layout.Rigid(
 				func(gtx layout.Context) layout.Dimensions {
 					progressPercentage := float32(*step.Progress) / float32(100)
 					fmt.Println("FFF", progressPercentage)
 					pg := material.ProgressBar(theme, progressPercentage)
-					return pg.Layout(gtx)
+					return layout.Inset{Top: 4, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return pg.Layout(gtx)
+					})
 				}))
 		}
 
-		retVal = append(retVal, additionalSteps...)
+		r := layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, additionalSteps...)
+			})
+		})
+
+		retVal = append(retVal, r)
 	}
 
 	retVal = append(retVal,
