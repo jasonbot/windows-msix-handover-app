@@ -94,21 +94,60 @@ func (g *giorunner) main() {
 	app.Main()
 }
 
+func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
+	// Define an large label with an appropriate text:
+	title := material.Label(theme, 14, g.title)
+	// Change the position of the label.
+	title.Alignment = text.Middle
+	title.Font.Weight = font.Bold
+	retVal := []layout.FlexChild{
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return title.Layout(gtx)
+		}),
+	}
+
+	for _, step := range g.steps {
+		retVal = append(retVal,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Label(theme, 12, step.Title+string(step.State))
+				if step.State == StepInProgress {
+					label.Font.Weight = font.Bold
+				}
+				return label.Layout(gtx)
+			}),
+		)
+	}
+
+	retVal = append(retVal,
+		layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
+			return layout.Spacer{}.Layout(gtx)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			text := "Running..."
+			if g.done {
+				text = "Done"
+			}
+			return material.Label(theme, 12, text).Layout(gtx)
+		}))
+
+	return retVal
+}
+
 func (g *giorunner) run() error {
 	theme := material.NewTheme()
 	if isDarkMode() {
 		theme.Palette = material.Palette{
-			Bg:         color.NRGBA{R: 0xFF, G: 0xFE, B: 0xFC, A: 0xFF},
-			Fg:         color.NRGBA{R: 0x04, G: 0x04, B: 0x04, A: 0xFF},
-			ContrastBg: color.NRGBA{R: 0xEF, G: 0xF3, B: 0xF5, A: 0xFF},
+			Bg:         color.NRGBA{R: 0x04, G: 0x04, B: 0x04, A: 0xFF},
+			Fg:         color.NRGBA{R: 0xFF, G: 0xFE, B: 0xFC, A: 0xFF},
+			ContrastBg: color.NRGBA{R: 0xEF, G: 0xF3, B: 0xF5, A: 0x88},
 			ContrastFg: color.NRGBA{R: 0x23, G: 0x83, B: 0xE2, A: 0xFF},
 		}
 	} else {
 		theme.Palette = material.Palette{
 			Bg:         color.NRGBA{R: 0xFF, G: 0xFE, B: 0xFC, A: 0xFF},
 			Fg:         color.NRGBA{R: 0x04, G: 0x04, B: 0x04, A: 0xFF},
-			ContrastBg: color.NRGBA{R: 0xEF, G: 0xF3, B: 0xF5, A: 0xFF},
-			ContrastFg: color.NRGBA{R: 0x23, G: 0x83, B: 0xE2, A: 0xFF},
+			ContrastBg: color.NRGBA{R: 0xEF, G: 0xF3, B: 0xF5, A: 0x88},
+			ContrastFg: color.NRGBA{R: 0xFF, G: 0xFE, B: 0xFC, A: 0xAA},
 		}
 	}
 	var ops op.Ops
@@ -121,44 +160,16 @@ func (g *giorunner) run() error {
 				return e.Err
 			}
 		case app.FrameEvent:
-			// This graphics context is used for managing the rendering state.
 			gtx := app.NewContext(&ops, e)
-
-			// Define an large label with an appropriate text:
-			title := material.Label(theme, 14, g.title)
-			// Change the position of the label.
-			title.Alignment = text.Middle
-			title.Font.Weight = font.Bold
-
-			// Draw the label to the graphics context.
-			// title.Layout(gtx)
 
 			layout.UniformInset(unit.Dp(24)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{
 					Axis: layout.Vertical,
 				}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return title.Layout(gtx)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return material.Label(theme, 12, "one").Layout(gtx)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return material.Label(theme, 12, "two").Layout(gtx)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return material.Label(theme, 12, "three").Layout(gtx)
-					}),
-					layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-						return layout.Spacer{}.Layout(gtx)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return material.Label(theme, 12, "four").Layout(gtx)
-					}),
+					g.stepListWidgets(theme)...,
 				)
 			})
 
-			// Pass the drawing operations to the GPU.
 			e.Frame(gtx.Ops)
 		}
 	}
@@ -188,6 +199,14 @@ func (g *giorunner) Finish() {
 	g.m.Lock()
 	defer g.m.Unlock()
 	g.done = true
+	for i := range g.steps {
+		if g.steps[i].State == StepPending {
+			g.steps[i].State = StepSkipped
+		}
+	}
+	if g.window != nil {
+		g.window.Invalidate()
+	}
 }
 
 func NewGioChecklist(title string) ChecklistRunner {
