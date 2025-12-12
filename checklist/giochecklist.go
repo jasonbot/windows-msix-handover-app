@@ -1,7 +1,8 @@
 package checklist
 
 import (
-	"fmt"
+	_ "embed"
+	"image"
 	"image/color"
 	"log"
 	"os"
@@ -15,9 +16,67 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/inkeliz/giosvg"
 	"golang.org/x/sys/windows/registry"
 )
+
+//go:embed wordmark.svg
+var wordmark []byte
+
+type iconWithColor struct {
+	icon  *giosvg.Icon
+	color color.NRGBA
+}
+
+var wordMark *giosvg.Icon
+var StatusSVGs map[StepState]*iconWithColor
+
+func init() {
+	if vector, err := giosvg.NewVector(wordmark); err == nil {
+		wordMark = giosvg.NewIcon(vector)
+	}
+
+	StatusSVGs = map[StepState]*iconWithColor{}
+
+	for _, item := range []struct {
+		status StepState
+		svg    string
+		color  color.NRGBA
+	}{
+		{
+			status: StepSuccess,
+			svg:    `<?xml version="1.0" encoding="UTF-8"?><svg width="24px" height="24px" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" color="currentColor"><path d="M7 12.5L10 15.5L17 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>`,
+			color:  color.NRGBA{R: 68, G: 131, B: 97, A: 255},
+		},
+		{
+			status: StepInProgress,
+			svg:    `<?xml version="1.0" encoding="UTF-8"?><svg width="24px" height="24px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" color="currentColor" stroke-width="1.5"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 1.25C6.06294 1.25 1.25 6.06294 1.25 12C1.25 17.9371 6.06294 22.75 12 22.75C17.9371 22.75 22.75 17.9371 22.75 12C22.75 6.06294 17.9371 1.25 12 1.25ZM13.0303 7.96967L16.5303 11.4697C16.8232 11.7626 16.8232 12.2374 16.5303 12.5303L13.0303 16.0303C12.7374 16.3232 12.2626 16.3232 11.9697 16.0303C11.6768 15.7374 11.6768 15.2626 11.9697 14.9697L14.1893 12.75H8C7.58579 12.75 7.25 12.4142 7.25 12C7.25 11.5858 7.58579 11.25 8 11.25H14.1893L11.9697 9.03033C11.6768 8.73744 11.6768 8.26256 11.9697 7.96967C12.2626 7.67678 12.7374 7.67678 13.0303 7.96967Z" fill="currentColor"></path></svg>`,
+			color:  color.NRGBA{R: 16, G: 95, B: 173, A: 255},
+		},
+		{
+			status: StepError,
+			svg:    `<?xml version="1.0" encoding="UTF-8"?><svg width="24px" height="24px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" color="currentColor" stroke-width="1.5"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 1.25C6.06294 1.25 1.25 6.06294 1.25 12C1.25 17.9371 6.06294 22.75 12 22.75C17.9371 22.75 22.75 17.9371 22.75 12C22.75 6.06294 17.9371 1.25 12 1.25ZM9.70164 8.64124C9.40875 8.34835 8.93388 8.34835 8.64098 8.64124C8.34809 8.93414 8.34809 9.40901 8.64098 9.7019L10.9391 12L8.64098 14.2981C8.34809 14.591 8.34809 15.0659 8.64098 15.3588C8.93388 15.6517 9.40875 15.6517 9.70164 15.3588L11.9997 13.0607L14.2978 15.3588C14.5907 15.6517 15.0656 15.6517 15.3585 15.3588C15.6514 15.0659 15.6514 14.591 15.3585 14.2981L13.0604 12L15.3585 9.7019C15.6514 9.40901 15.6514 8.93414 15.3585 8.64124C15.0656 8.34835 14.5907 8.34835 14.2978 8.64124L11.9997 10.9393L9.70164 8.64124Z" fill="currentColor"></path></svg>`,
+			color:  color.NRGBA{R: 205, G: 60, B: 58, A: 255},
+		},
+		{
+			status: StepSkipped,
+			svg:    `<?xml version="1.0" encoding="UTF-8"?><svg width="24px" height="24px" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" color="currentColor"><path d="M12 8V16M12 16L15.5 12.5M12 16L8.5 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>`,
+			color:  color.NRGBA{R: 115, G: 114, B: 110, A: 255},
+		},
+		{
+			status: StepPending,
+			svg:    `<?xml version="1.0" encoding="UTF-8"?><svg width="24px" height="24px" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" color="currentColor"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>`,
+			color:  color.NRGBA{R: 115, G: 114, B: 110, A: 255},
+		},
+	} {
+		if vector, err := giosvg.NewVector([]byte(item.svg)); err == nil {
+			icon := giosvg.NewIcon(vector)
+			StatusSVGs[item.status] = &iconWithColor{icon, item.color}
+		}
+	}
+}
 
 func isDarkMode() bool {
 	personalizeKey := `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
@@ -25,7 +84,7 @@ func isDarkMode() bool {
 	if key, err := registry.OpenKey(registry.CURRENT_USER, personalizeKey, registry.ALL_ACCESS); err == nil {
 		defer key.Close()
 		if val, _, err := key.GetIntegerValue("AppsUseLightTheme"); err == nil {
-			return err != nil && val != 0
+			return val == 0
 		} else {
 			return false
 		}
@@ -64,7 +123,7 @@ func (s *giostep) SetState(state StepState) {
 	}
 }
 
-func (s *giostep) SetProgressPercentage(p *int8) {
+func (s *giostep) SetProgressPercentage(p int8) {
 	s.ChecklistStep.Progress = p
 	if r := s.runner.Value(); r != nil && r.window != nil {
 		r.window.Invalidate()
@@ -78,6 +137,7 @@ type giorunner struct {
 	window       *app.Window
 	m            sync.Mutex
 	done         bool
+	button       widget.Clickable
 }
 
 func (g *giorunner) main() {
@@ -97,14 +157,33 @@ func (g *giorunner) main() {
 }
 
 func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
-	// Define an large label with an appropriate text:
-	title := material.Label(theme, 14, g.title)
-	// Change the position of the label.
-	title.Alignment = text.Middle
-	title.Font.Weight = font.Bold
 	retVal := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return title.Layout(gtx)
+			// Define an large label with an appropriate text:
+			title := material.Label(theme, 14, g.title)
+			// Change the position of the label.
+			title.Alignment = text.Middle
+			title.Font.Weight = font.Bold
+
+			return layout.UniformInset(unit.Dp(24)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{
+					Axis:      layout.Vertical,
+					Alignment: layout.Middle,
+				}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if wordMark != nil {
+							gtx.Constraints.Min = image.Pt(1100/8, 317/8)
+							gtx.Constraints.Max = image.Pt(1100/4, 317/4)
+							return wordMark.Layout(gtx)
+						}
+						return layout.Spacer{}.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return title.Layout(gtx)
+						})
+					}))
+			})
 		}),
 	}
 
@@ -118,20 +197,19 @@ func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
 					}
 					return label.Layout(gtx)
 				}),
-		}
-		if step.Message != "" {
-			additionalSteps = append(additionalSteps, layout.Rigid(
+			layout.Rigid(
 				func(gtx layout.Context) layout.Dimensions {
-					label := material.Label(theme, 11, step.Message)
-					return label.Layout(gtx)
-				}))
+					return layout.Inset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						label := material.Label(theme, 11, step.Message)
+						return label.Layout(gtx)
+					})
+				}),
 		}
 
-		if step.Progress != nil {
+		if step.Progress >= 0 {
 			additionalSteps = append(additionalSteps, layout.Rigid(
 				func(gtx layout.Context) layout.Dimensions {
-					progressPercentage := float32(*step.Progress) / float32(100)
-					fmt.Println("FFF", progressPercentage)
+					progressPercentage := float32(step.Progress) / float32(100)
 					pg := material.ProgressBar(theme, progressPercentage)
 					return layout.Inset{Top: 4, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return pg.Layout(gtx)
@@ -145,12 +223,19 @@ func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
 				Alignment: layout.Baseline,
 			}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return material.Label(theme, 24, "ICON").Layout(gtx)
+					if StatusSVGs[step.State] != nil {
+						return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							paint.ColorOp{Color: StatusSVGs[step.State].color}.Add(gtx.Ops)
+							gtx.Constraints.Max = image.Pt(28, 28)
+							return StatusSVGs[step.State].icon.Layout(gtx)
+						})
+					}
+					return material.Label(theme, 18, string(step.State)).Layout(gtx)
 				}),
 				layout.Flexed(
 					1.0,
 					func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Bottom: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							return layout.Flex{Axis: layout.Vertical}.Layout(gtx, additionalSteps...)
 						})
 					}),
@@ -169,11 +254,13 @@ func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
 			return layout.Spacer{}.Layout(gtx)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			text := "Running..."
+			labelContent := "Running..."
 			if g.done {
-				text = "Done"
+				labelContent = "Done. You can close this window."
 			}
-			return material.Label(theme, 12, text).Layout(gtx)
+			l := material.Label(theme, 12, labelContent)
+			l.Alignment = text.End
+			return l.Layout(gtx)
 		}))
 
 	return retVal
@@ -207,6 +294,9 @@ func (g *giorunner) run() error {
 			}
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
+			if g.button.Clicked(gtx) {
+				log.Println("OK")
+			}
 
 			paint.ColorOp{Color: theme.Palette.Bg}.Add(&ops)
 			paint.PaintOp{}.Add(&ops)
@@ -227,7 +317,8 @@ func (g *giorunner) run() error {
 func (g *giorunner) AddStep(title string) RunStep {
 	step := giostep{
 		ChecklistStep: ChecklistStep{
-			Title: title,
+			Title:    title,
+			Progress: -1,
 		},
 		index:  len(g.steps),
 		runner: weak.Make(g),

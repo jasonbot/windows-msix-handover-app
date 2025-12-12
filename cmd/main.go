@@ -270,7 +270,6 @@ func (w *writerWrapper) Write(p []byte) (n int, err error) {
 	}
 	w.hasher.Write(p)
 	w.bytesSoFar += int64(len(p))
-	log.Println("Progress:", w.bytesSoFar, "/", w.TotalBytes)
 	if w.Progress != nil {
 		w.Progress(w.bytesSoFar, w.TotalBytes)
 	}
@@ -349,7 +348,7 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 		Progress: func(current, total int64) {
 			if total > 0 {
 				var pp int8 = int8((float64(current) / float64(total)) * 100.0)
-				rs.SetProgressPercentage(&pp)
+				rs.SetProgressPercentage(pp)
 			}
 		},
 	}
@@ -389,7 +388,6 @@ func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool, rs checklist
 		management.DeploymentOptions_ForceTargetApplicationShutdown,
 	)
 
-	var pp int8
 	Ro_AwaitWithProgress(
 		op,
 		func(
@@ -397,8 +395,7 @@ func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool, rs checklist
 			progress management.DeploymentProgress,
 		) error {
 			log.Println("Percentage:", progress.Percentage)
-			pp = int8(progress.Percentage)
-			rs.SetProgressPercentage(&pp)
+			rs.SetProgressPercentage(int8(progress.Percentage))
 			return nil
 		},
 		func(
@@ -469,7 +466,13 @@ func main() {
 		return
 	}
 
-	cl := checklist.NewGioChecklist("Installing " + app.ProductName)
+	var cl checklist.ChecklistRunner
+
+	if isSilent() {
+		cl = checklist.NewConsoleChecklist("Installing " + app.ProductName)
+	} else {
+		cl = checklist.NewGioChecklist("Installing " + app.ProductName)
+	}
 
 	msixstep := cl.AddStep("Finding latest app version online")
 	stopstep := cl.AddStep("Stop current app")

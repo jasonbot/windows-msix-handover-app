@@ -14,13 +14,13 @@ type ChecklistStep struct {
 	Title    string
 	Message  string
 	State    StepState
-	Progress *int8
+	Progress int8
 }
 
 type RunStep interface {
 	SetMessage(string)
 	SetState(StepState)
-	SetProgressPercentage(*int8)
+	SetProgressPercentage(int8)
 }
 
 type ChecklistRunner interface {

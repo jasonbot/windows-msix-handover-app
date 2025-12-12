@@ -14,8 +14,7 @@ func handleSteps(steps []checklist.RunStep, cl checklist.ChecklistRunner) {
 		item.SetState(checklist.StepInProgress)
 		item.SetMessage("Hi there")
 		for progress := range 100 {
-			var p int8 = int8(progress)
-			steps[i].SetProgressPercentage(&p)
+			steps[i].SetProgressPercentage(int8(progress))
 			time.Sleep(3 * time.Millisecond)
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -26,7 +25,7 @@ func handleSteps(steps []checklist.RunStep, cl checklist.ChecklistRunner) {
 }
 
 func main() {
-	cl := checklist.NewGioChecklist("Hello, world")
+	cl := checklist.NewConsoleChecklist("Hello, world")
 	steps := []checklist.RunStep{
 		cl.AddStep("Step 1. Ham"),
 		cl.AddStep("Step 2. Bacon"),

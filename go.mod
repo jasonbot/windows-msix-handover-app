@@ -5,18 +5,17 @@ go 1.25.3
 require (
 	gioui.org v0.9.0
 	github.com/goccy/go-yaml v1.18.0
+	github.com/inkeliz/giosvg v0.0.0-20240821232107-3208d4350d55
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/zzl/go-com v1.5.0
 	github.com/zzl/go-win32api v1.2.0
 	github.com/zzl/go-win32api/v2 v2.1.0
 	github.com/zzl/go-winrtapi v1.0.0
 	golang.org/x/sys v0.38.0
-	github.com/inkeliz/giosvg v0.0.0-20240821232107-3208d4350d55
 )
 
 require (
 	gioui.org/shader v1.0.8 // indirect
-	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-text/typesetting v0.3.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
