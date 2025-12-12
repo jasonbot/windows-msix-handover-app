@@ -11,6 +11,7 @@ import (
 	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget/material"
@@ -161,6 +162,9 @@ func (g *giorunner) run() error {
 			}
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
+
+			paint.ColorOp{Color: theme.Palette.Bg}.Add(&ops)
+			paint.PaintOp{}.Add(&ops)
 
 			layout.UniformInset(unit.Dp(24)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{
