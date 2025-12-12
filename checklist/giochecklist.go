@@ -1,6 +1,7 @@
 package checklist
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"os"
@@ -72,7 +73,7 @@ func (s *giostep) SetProgressPercentage(p *int8) {
 
 type giorunner struct {
 	title        string
-	steps        []giostep
+	steps        []*giostep
 	currentindex int
 	window       *app.Window
 	m            sync.Mutex
@@ -108,15 +109,37 @@ func (g *giorunner) stepListWidgets(theme *material.Theme) []layout.FlexChild {
 	}
 
 	for _, step := range g.steps {
-		retVal = append(retVal,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Label(theme, 12, step.Title+string(step.State))
-				if step.State == StepInProgress {
-					label.Font.Weight = font.Bold
-				}
-				return label.Layout(gtx)
-			}),
-		)
+		additionalSteps := []layout.FlexChild{
+			layout.Rigid(
+				func(gtx layout.Context) layout.Dimensions {
+					label := material.Label(theme, 12, step.Title)
+					if step.State == StepInProgress {
+						label.Font.Weight = font.Bold
+					}
+					return label.Layout(gtx)
+				}),
+		}
+		if step.Message != "" {
+			fmt.Println("Adding progress bar")
+			additionalSteps = append(additionalSteps, layout.Rigid(
+				func(gtx layout.Context) layout.Dimensions {
+					label := material.Label(theme, 11, step.Message)
+					return label.Layout(gtx)
+				}))
+		}
+
+		if step.Progress != nil {
+			fmt.Println("Adding progress bar")
+			additionalSteps = append(additionalSteps, layout.Rigid(
+				func(gtx layout.Context) layout.Dimensions {
+					progressPercentage := float32(*step.Progress) / float32(100)
+					fmt.Println("FFF", progressPercentage)
+					pg := material.ProgressBar(theme, progressPercentage)
+					return pg.Layout(gtx)
+				}))
+		}
+
+		retVal = append(retVal, additionalSteps...)
 	}
 
 	retVal = append(retVal,
@@ -187,7 +210,7 @@ func (g *giorunner) AddStep(title string) RunStep {
 		index:  len(g.steps),
 		runner: weak.Make(g),
 	}
-	g.steps = append(g.steps, step)
+	g.steps = append(g.steps, &step)
 
 	if g.window != nil {
 		g.window.Invalidate()
@@ -216,6 +239,6 @@ func (g *giorunner) Finish() {
 func NewGioChecklist(title string) ChecklistRunner {
 	return &giorunner{
 		title: title,
-		steps: []giostep{},
+		steps: []*giostep{},
 	}
 }

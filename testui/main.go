@@ -12,7 +12,13 @@ func handleSteps(steps []checklist.RunStep, cl checklist.ChecklistRunner) {
 	for i := range steps {
 		item := steps[i]
 		item.SetState(checklist.StepInProgress)
-		time.Sleep(2 * time.Second)
+		item.SetMessage("Hi there")
+		for progress := range 100 {
+			var p int8 = int8(progress)
+			steps[i].SetProgressPercentage(&p)
+			time.Sleep(3 * time.Millisecond)
+		}
+		time.Sleep(500 * time.Millisecond)
 		item.SetState(checklist.StepSuccess)
 		log.Println("Step", i+1)
 	}

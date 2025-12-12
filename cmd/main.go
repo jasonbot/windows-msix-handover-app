@@ -23,6 +23,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/jasonbot/windows-msix-handover-app/channels"
+	"github.com/jasonbot/windows-msix-handover-app/checklist"
 	"github.com/jasonbot/windows-msix-handover-app/config"
 	management "github.com/jasonbot/windows-msix-handover-app/management"
 	"github.com/shirou/gopsutil/process"
@@ -133,8 +134,10 @@ func IsRunningElevated() bool {
 	return windows.GetCurrentProcessToken().IsElevated()
 }
 
-func stopAppIfRunning(appName string) {
+func stopAppIfRunning(appName string, rs checklist.RunStep) {
 	exeName := fmt.Sprintf("%v.exe", appName)
+	rs.SetState(checklist.StepInProgress)
+	rs.SetMessage("Looking for " + exeName)
 
 	findRootProcess := func(p *process.Process) *process.Process {
 		exeName, _ := p.Exe()
@@ -161,15 +164,18 @@ func stopAppIfRunning(appName string) {
 					log.Println("Found process", pb, proc.Pid)
 					proc.Terminate()
 					for pr, _ := proc.IsRunning(); pr; pr, _ = proc.IsRunning() {
+						rs.SetMessage(fmt.Sprintf("Witing for PID %v to exit", proc.Pid))
 						log.Println("Waiting to quit")
 					}
 				}
 			}
 		}
 	}
+	rs.SetState(checklist.StepSuccess)
 }
 
-func uninstallWin32AppIfInstalled(appName string) {
+func uninstallWin32AppIfInstalled(appName string, rs checklist.RunStep) {
+	rs.SetState(checklist.StepInProgress)
 	ui := `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`
 
 	for _, tk := range []registry.Key{registry.CURRENT_USER, registry.LOCAL_MACHINE} {
@@ -194,21 +200,26 @@ func uninstallWin32AppIfInstalled(appName string) {
 						if displayName == desiredProductName {
 							log.Println("Found it:", quietUninstallString, publisher)
 							log.Println("When done:", exec.Command(quietUninstallString).Run())
+							rs.SetState(checklist.StepSuccess)
 							return
 						}
 					}
 				}
 			} else {
+				rs.SetState(checklist.StepError)
 				log.Println("Error reading keys", err)
 			}
 		}
 	}
 }
 
-func findLatestMSIXUpdate(channelYamlURL string) (string, int64, string, error) {
+func findLatestMSIXUpdate(channelYamlURL string, rs checklist.RunStep) (string, int64, string, error) {
+	rs.SetState(checklist.StepInProgress)
 	req, _ := http.NewRequest("GET", channelYamlURL, nil)
 	resp, _ := http.DefaultClient.Do(req)
 	if resp.StatusCode != 200 {
+		rs.SetMessage(fmt.Sprintf("fetching %v returned %v", channelYamlURL, resp.StatusCode))
+		rs.SetState(checklist.StepError)
 		return "", 0, "", fmt.Errorf("fetching %v returned %v", channelYamlURL, resp.StatusCode)
 	}
 	defer resp.Body.Close()
@@ -250,6 +261,7 @@ type writerWrapper struct {
 	Out        io.Writer
 	bytesSoFar int64
 	TotalBytes int64
+	Progress   func(int64, int64)
 }
 
 func (w *writerWrapper) Write(p []byte) (n int, err error) {
@@ -259,6 +271,9 @@ func (w *writerWrapper) Write(p []byte) (n int, err error) {
 	w.hasher.Write(p)
 	w.bytesSoFar += int64(len(p))
 	log.Println("Progress:", w.bytesSoFar, "/", w.TotalBytes)
+	if w.Progress != nil {
+		w.Progress(w.bytesSoFar, w.TotalBytes)
+	}
 	return w.Out.Write(p)
 }
 
@@ -280,7 +295,8 @@ func shaForPath(filePath string) string {
 	return "no"
 }
 
-func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha512Sum string) (string, bool) {
+func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha512Sum string, rs checklist.RunStep) (string, bool) {
+	rs.SetState(checklist.StepInProgress)
 	u, _ := url.Parse(msixURL)
 	if u == nil {
 		return "", false
@@ -311,6 +327,7 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	req, _ := http.NewRequest("GET", msixURL, nil)
 	resp, _ := http.DefaultClient.Do(req)
 	if resp.StatusCode != 200 {
+		rs.SetState(checklist.StepError)
 		return "", false
 	}
 	defer resp.Body.Close()
@@ -320,6 +337,12 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 	writer := writerWrapper{
 		Out:        f,
 		TotalBytes: fileSize,
+		Progress: func(current, total int64) {
+			if total > 0 {
+				var pp int8 = int8((float64(current) / float64(total)) * 100.0)
+				rs.SetProgressPercentage(&pp)
+			}
+		},
 	}
 	io.Copy(&writer, resp.Body)
 
@@ -327,13 +350,15 @@ func downloadMSIXToDownloadsFolder(msixURL string, fileSize int64, expectedSha51
 		return "", false
 	}
 
+	rs.SetState(checklist.StepSuccess)
 	return fileName, true
 }
 
-func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool) {
+func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool, rs checklist.RunStep) {
 	runtime.LockOSThread()
 	winrt.Initialize()
 	// defer winrt.Uninitialize()
+	rs.SetState(checklist.StepInProgress)
 
 	msixURI := fmt.Sprint("file://", strings.ReplaceAll(msixPath, "\\", "/"))
 	log.Println("MSIX", msixURI)
@@ -352,6 +377,7 @@ func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool) {
 		management.DeploymentOptions_ForceTargetApplicationShutdown,
 	)
 
+	var pp int8
 	Ro_AwaitWithProgress(
 		op,
 		func(
@@ -359,6 +385,8 @@ func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool) {
 			progress management.DeploymentProgress,
 		) error {
 			log.Println("Percentage:", progress.Percentage)
+			pp = int8(progress.Percentage)
+			rs.SetProgressPercentage(&pp)
 			return nil
 		},
 		func(
@@ -383,20 +411,35 @@ func installMSIXFromDownloadsFolder(msixPath string, doIOwnIt bool) {
 			return nil
 		},
 	)
+	rs.SetState(checklist.StepSuccess)
 }
 
-func runInstalledApp(protocolHandler string) {
+func runInstalledApp(protocolHandler string, rs checklist.RunStep) {
 	uri := protocolHandler + "://"
 
+	rs.SetMessage("Running...")
 	fmt.Println("Ran", uri, exec.Command("cmd", "/c", "start", uri).Run())
+	rs.SetState(checklist.StepSuccess)
+}
+
+func isSilent() bool {
+	for _, i := range os.Args {
+		s := strings.ToLower(i)
+		if s == "/q" || s == "/s" || s == "--silent" || s == "--quiet" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func main() {
 	installTarget := config.TargetProduct
 
 	if installTarget == "" {
+		installTarget = "Notion Stg"
 		log.Println("No target set")
-		os.Exit(1)
+		// os.Exit(1)
 	}
 
 	var arch = channels.ArchAmd64
@@ -414,18 +457,36 @@ func main() {
 		return
 	}
 
-	feed := channels.DesktopProductFeeds[app]
-	msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(feed.YamlFeed)
-	if err == nil {
-		msixPath, doIOwnIt := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512)
+	cl := checklist.NewGioChecklist("Installing " + app.ProductName)
 
-		if msixPath != "" {
-			stopAppIfRunning(app.ProductName)
-			uninstallWin32AppIfInstalled(app.ProductName)
-			installMSIXFromDownloadsFolder(msixPath, doIOwnIt)
-			runInstalledApp(feed.Protocol)
+	msixstep := cl.AddStep("Finding latest app version online")
+	stopstep := cl.AddStep("Stop current app")
+	uninstallstep := cl.AddStep("Uninstall old app")
+	installstep := cl.AddStep("Install app")
+	runappstep := cl.AddStep("Run installed app")
+
+	go func() {
+		feed := channels.DesktopProductFeeds[app]
+		msixUrl, fileSize, sha512, err := findLatestMSIXUpdate(feed.YamlFeed, msixstep)
+		if err == nil {
+			msixPath, doIOwnIt := downloadMSIXToDownloadsFolder(msixUrl, fileSize, sha512, msixstep)
+
+			if msixPath != "" {
+				stopAppIfRunning(app.ProductName, stopstep)
+				uninstallWin32AppIfInstalled(app.ProductName, uninstallstep)
+				installMSIXFromDownloadsFolder(msixPath, doIOwnIt, installstep)
+				runInstalledApp(feed.Protocol, runappstep)
+			} else {
+				stopstep.SetState(checklist.StepSkipped)
+				uninstallstep.SetState(checklist.StepSkipped)
+				installstep.SetState(checklist.StepSkipped)
+				runappstep.SetState(checklist.StepSkipped)
+			}
 		}
-	}
+
+		cl.Finish()
+	}()
+	cl.Start()
 
 	log.Println("Press key to get out")
 	reader := bufio.NewReader(os.Stdin)
